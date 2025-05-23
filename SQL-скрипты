@@ -1,0 +1,70 @@
+-- Создание таблиц
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(100) NOT NULL,
+    role VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE products (
+    product_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    sku VARCHAR(50) UNIQUE NOT NULL,
+    price DECIMAL(10, 2) NOT NULL
+);
+
+CREATE TABLE suppliers (
+    supplier_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    contact VARCHAR(100)
+);
+
+CREATE TABLE warehouses (
+    warehouse_id SERIAL PRIMARY KEY,
+    location VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE orders (
+    order_id SERIAL PRIMARY KEY,
+    supplier_id INT REFERENCES suppliers(supplier_id),
+    date DATE NOT NULL
+);
+
+CREATE TABLE inventory (
+    inventory_id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(product_id),
+    warehouse_id INT REFERENCES warehouses(warehouse_id),
+    quantity INT NOT NULL CHECK (quantity >= 0),
+    UNIQUE (product_id, warehouse_id)
+);
+
+CREATE TABLE reports (
+    report_id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(user_id),
+    type VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Начальное наполнение данными (опционально)
+INSERT INTO users (username, password, role) VALUES 
+('admin', 'hashed_password_123', 'admin'),
+('keeper1', 'hashed_password_456', 'keeper');
+
+INSERT INTO products (name, sku, price) VALUES 
+('Ноутбук', 'NB001', 999.99),
+('Монитор', 'MN002', 299.50);
+
+INSERT INTO suppliers (name, contact) VALUES 
+('TechSupplier Inc.', 'Иван Петров'),
+('OfficeEquipment LLC', 'Мария Сидорова');
+
+INSERT INTO warehouses (location) VALUES 
+('Москва, ул. Складская, 1'),
+('Санкт-Петербург, пр. Логистический, 5');
+
+-- Тестовые запросы
+SELECT * FROM products WHERE price > 500;
+SELECT w.location, p.name, i.quantity 
+FROM inventory i
+JOIN products p ON i.product_id = p.product_id
+JOIN warehouses w ON i.warehouse_id = w.warehouse_id;
