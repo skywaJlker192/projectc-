@@ -1,0 +1,98 @@
+import sqlite3
+from typing import List, Dict, Optional
+
+def get_db_connection():
+    conn = sqlite3.connect('warehouse.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+class WarehouseApp:
+    def __init__(self):
+        self.conn = get_db_connection()
+    
+    def show_main_menu(self):
+        while True:
+            print("\n=== Информационная система склада ===")
+            print("1. Управление товарами")
+            print("2. Управление складами")
+            print("3. Управление поставщиками")
+            print("4. Работа с заказами")
+            print("5. Отчеты")
+            print("0. Выход")
+            
+            try:
+                choice = int(input("Выберите пункт: "))
+                if choice == 0:
+                    break
+                elif choice == 1:
+                    self.show_products_menu()
+                elif choice == 2:
+                    self.show_warehouses_menu()
+                # ... другие пункты
+            except ValueError:
+                print("Ошибка: введите число!")
+            except Exception as e:
+                print(f"Произошла ошибка: {e}")
+
+    def show_products_menu(self):
+        while True:
+            print("\n=== Управление товарами ===")
+            print("1. Добавить товар")
+            print("2. Просмотреть все товары")
+            print("3. Найти товар по артикулу")
+            print("4. Удалить товар")
+            print("5. Вернуться")
+            
+            try:
+                choice = int(input("Выберите действие: "))
+                if choice == 1:
+                    self.add_product()
+                elif choice == 2:
+                    self.list_products()
+                # ... другие пункты
+                elif choice == 5:
+                    break
+            except ValueError:
+                print("Ошибка: введите число!")
+
+    def add_product(self):
+        try:
+            name = input("Название товара: ").strip()
+            if not name:
+                raise ValueError("Название не может быть пустым")
+            
+            sku = input("Артикул: ").strip()
+            price = float(input("Цена: "))
+            if price <= 0:
+                raise ValueError("Цена должна быть положительной")
+            
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT INTO products (name, sku, price) VALUES (?, ?, ?)",
+                (name, sku, price)
+            )
+            self.conn.commit()
+            print("Товар добавлен!")
+        except ValueError as e:
+            print(f"Ошибка ввода: {e}")
+        except sqlite3.IntegrityError:
+            print("Ошибка: товар с таким артикулом уже существует")
+        except Exception as e:
+            print(f"Ошибка: {e}")
+
+    def list_products(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM products")
+        products = cursor.fetchall()
+        
+        if not products:
+            print("Товары не найдены")
+            return
+        
+        print("\nСписок товаров:")
+        for product in products:
+            print(f"{product['product_id']}. {product['name']} ({product['sku']}) - {product['price']} ₽")
+
+if __name__ == "__main__":
+    app = WarehouseApp()
+    app.show_main_menu()
