@@ -115,6 +115,7 @@ Use Case → Объясняет "Для кого и зачем создана с
 Краткое описание:
 
 **Числовые значения (цена, количество):**
+```
 python
 try:
     quantity = int(input("Количество: "))
@@ -122,18 +123,21 @@ try:
         raise ValueError("Количество должно быть положительным")
 except ValueError:
     print("Ошибка: введите целое число!")
-
+```
 **Обязательные поля:**
+```
 python
 name = input("Название: ").strip()
 if not name:
     print("Ошибка: название не может быть пустым")
     return
-
+```
 **Обработка SQL-ошибок:**
+```
 python
 try:
     cursor.execute("INSERT INTO ...")
     self.conn.commit()
 except sqlite3.IntegrityError as e:
     print(f"Ошибка БД: {e}")
+```
