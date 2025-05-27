@@ -1,0 +1,172 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+
+namespace WarehouseSystem
+{
+    public abstract class BaseService
+    {
+        protected readonly DatabaseManager _dbManager;
+        protected readonly ILogger _logger;
+
+        protected BaseService(DatabaseManager dbManager, ILogger logger)
+        {
+            _dbManager = dbManager ?? throw new ArgumentNullException(nameof(dbManager));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        protected virtual void ValidateInput<T>(T input, string paramName)
+        {
+            if (input == null)
+                throw new ArgumentNullException(paramName);
+        }
+    }
+
+    public class WarehouseService : BaseService
+    {
+        public WarehouseService(DatabaseManager dbManager, ILogger<WarehouseService> logger)
+            : base(dbManager, logger) { }
+
+        public async Task<int?> AddProductAsync(string name, string sku, decimal price)
+        {
+            try
+            {
+                ValidateInput(name, nameof(name));
+                ValidateInput(sku, nameof(sku));
+                if (price <= 0)
+                    throw new ArgumentException("Цена должна быть положительной", nameof(price));
+
+                var productId = await _dbManager.CreateProductAsync(name, sku, price);
+                if (productId == null)
+                {
+                    _logger.LogWarning($"Не удалось создать товар: SKU {sku} уже существует");
+                    return null;
+                }
+                return productId;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogError($"Ошибка валидации: {ex.Message}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при добавлении товара: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<bool> MoveProductAsync(int productId, int fromWarehouseId, int toWarehouseId, int quantity)
+        {
+            try
+            {
+                if (quantity <= 0)
+                    throw new ArgumentException("Количество должно быть положительным", nameof(quantity));
+
+                var fromInventory = await _dbManager.GetInventoryAsync(fromWarehouseId);
+                if (fromInventory == null || fromInventory.ProductId != productId || fromInventory.Quantity < quantity)
+                {
+                    _logger.LogWarning($"Недостаточно товара на складе {fromWarehouseId} для перемещения");
+                    return false;
+                }
+
+                var updated = await _dbManager.UpdateInventoryAsync(fromInventory.InventoryId, fromInventory.Quantity - quantity);
+                if (!updated)
+                    return false;
+
+                var toInventory = await _dbManager.GetInventoryAsync(toWarehouseId);
+                if (toInventory != null && toInventory.ProductId == productId)
+                {
+                    updated = await _dbManager.UpdateInventoryAsync(toInventory.InventoryId, toInventory.Quantity + quantity);
+                }
+                else
+                {
+                    await _dbManager.AddInventoryAsync(productId, toWarehouseId, quantity);
+                }
+
+                _logger.LogInformation($"Перемещено {quantity} единиц товара {productId} с {fromWarehouseId} на {toWarehouseId}");
+                return true;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogError($"Ошибка валидации: {ex.Message}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при перемещении товара: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> PerformInventoryAsync(int warehouseId, Dictionary<int, int> actualQuantities)
+        {
+            try
+            {
+                ValidateInput(actualQuantities, nameof(actualQuantities));
+
+                foreach (var entry in actualQuantities)
+                {
+                    var productId = entry.Key;
+                    var actualQuantity = entry.Value;
+
+                    var inventory = await _dbManager.GetInventoryAsync(warehouseId);
+                    if (inventory != null && inventory.ProductId == productId)
+                    {
+                        if (inventory.Quantity != actualQuantity)
+                        {
+                            await _dbManager.UpdateInventoryAsync(inventory.InventoryId, actualQuantity);
+                            _logger.LogInformation($"Обновлено количество товара {productId} на складе {warehouseId}: {actualQuantity}");
+                        }
+                    }
+                    else
+                    {
+                        await _dbManager.AddInventoryAsync(productId, warehouseId, actualQuantity);
+                        _logger.LogInformation($"Добавлена запись для товара {productId} на складе {warehouseId}: {actualQuantity}");
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при инвентаризации: {ex.Message}");
+                return false;
+            }
+        }
+    }
+
+    public class ReportService : BaseService
+    {
+        public ReportService(DatabaseManager dbManager, ILogger<ReportService> logger)
+            : base(dbManager, logger) { }
+
+        // Генерация отчета по остаткам
+        public async Task<string> GenerateStockReportAsync(int warehouseId)
+        {
+            try
+            {
+                var inventory = await _dbManager.GetInventoryAsync(warehouseId);
+                if (inventory == null)
+                {
+                    _logger.LogWarning($"Нет данных для склада {warehouseId}");
+                    return "Склад пуст.";
+                }
+
+                var report = new System.Text.StringBuilder();
+                report.AppendLine($"Отчет по остаткам на складе {warehouseId} ({DateTime.Now:yyyy-MM-dd HH:mm:ss})");
+                report.AppendLine("------------------------------------------------");
+                report.AppendLine($"Товар: {inventory.Product.Name}, SKU: {inventory.Product.Sku}, Количество: {inventory.Quantity}");
+
+                _logger.LogInformation($"Сформирован отчет по остаткам для склада {warehouseId}");
+                return report.ToString();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при генерации отчета: {ex.Message}");
+                return "Ошибка при генерации отчета.";
+            }
+        }
+    }
+}
