@@ -1,0 +1,182 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+
+namespace WarehouseSystem
+{
+    public class ConsoleInterface
+    {
+        private readonly WarehouseService _warehouseService;
+        private readonly ReportService _reportService;
+        private readonly ILogger<ConsoleInterface> _logger;
+
+        public ConsoleInterface(WarehouseService warehouseService, ReportService reportService, ILogger<ConsoleInterface> logger)
+        {
+            _warehouseService = warehouseService ?? throw new ArgumentNullException(nameof(warehouseService));
+            _reportService = reportService ?? throw new ArgumentNullException(nameof(reportService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public async Task RunAsync()
+        {
+            while (true)
+            {
+                DisplayMenu();
+                string choice = Console.ReadLine()?.Trim();
+
+                try
+                {
+                    switch (choice)
+                    {
+                        case "1":
+                            await AddProductAsync();
+                            break;
+                        case "2":
+                            await MoveProductAsync();
+                            break;
+                        case "3":
+                            await PerformInventoryAsync();
+                            break;
+                        case "4":
+                            await GenerateStockReportAsync();
+                            break;
+                        case "5":
+                            Console.WriteLine("Выход...");
+                            return;
+                        default:
+                            Console.WriteLine("Некорректная команда. Попробуйте снова.");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Ошибка: {ex.Message}");
+                    Console.WriteLine($"Ошибка: {ex.Message}");
+                }
+
+                Console.WriteLine("\nНажмите Enter для продолжения...");
+                Console.ReadLine();
+                Console.Clear();
+            }
+        }
+
+        private void DisplayMenu()
+        {
+            Console.WriteLine("=== Информационная система склада ===");
+            Console.WriteLine("1. Добавить товар");
+            Console.WriteLine("2. Переместить товар");
+            Console.WriteLine("3. Провести инвентаризацию");
+            Console.WriteLine("4. Сгенерировать отчет по остаткам");
+            Console.WriteLine("5. Выход");
+            Console.Write("Выберите действие (1-5): ");
+        }
+
+        private async Task AddProductAsync()
+        {
+            Console.Write("Введите название товара: ");
+            string name = Console.ReadLine()?.Trim();
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("Название не может быть пустым.");
+            }
+
+            Console.Write("Введите SKU: ");
+            string sku = Console.ReadLine()?.Trim();
+            if (string.IsNullOrEmpty(sku))
+            {
+                throw new ArgumentException("SKU не может быть пустым.");
+            }
+
+            Console.Write("Введите цену: ");
+            if (!decimal.TryParse(Console.ReadLine(), out decimal price) || price <= 0)
+            {
+                throw new ArgumentException("Цена должна быть положительным числом.");
+            }
+
+            var productId = await _warehouseService.AddProductAsync(name, sku, price);
+            if (productId.HasValue)
+            {
+                Console.WriteLine($"Товар успешно добавлен. ID: {productId}");
+            }
+            else
+            {
+                Console.WriteLine("Не удалось добавить товар. Возможно, SKU уже существует.");
+            }
+        }
+
+        private async Task MoveProductAsync()
+        {
+            Console.Write("Введите ID товара: ");
+            if (!int.TryParse(Console.ReadLine(), out int productId) || productId <= 0)
+            {
+                throw new ArgumentException("ID товара должен быть положительным числом.");
+            }
+
+            Console.Write("Введите ID исходного склада: ");
+            if (!int.TryParse(Console.ReadLine(), out int fromWarehouseId) || fromWarehouseId <= 0)
+            {
+                throw new ArgumentException("ID склада должен быть положительным числом.");
+            }
+
+            Console.Write("Введите ID целевого склада: ");
+            if (!int.TryParse(Console.ReadLine(), out int toWarehouseId) || toWarehouseId <= 0)
+            {
+                throw new ArgumentException("ID склада должен быть положительным числом.");
+            }
+
+            Console.Write("Введите количество: ");
+            if (!int.TryParse(Console.ReadLine(), out int quantity) || quantity <= 0)
+            {
+                throw new ArgumentException("Количество должно быть положительным числом.");
+            }
+
+            bool success = await _warehouseService.MoveProductAsync(productId, fromWarehouseId, toWarehouseId, quantity);
+            Console.WriteLine(success ? "Товар успешно перемещен." : "Не удалось переместить товар. Проверьте наличие товара на складе.");
+        }
+
+        private async Task PerformInventoryAsync()
+        {
+            Console.Write("Введите ID склада: ");
+            if (!int.TryParse(Console.ReadLine(), out int warehouseId) || warehouseId <= 0)
+            {
+                throw new ArgumentException("ID склада должен быть положительным числом.");
+            }
+
+            var actualQuantities = new Dictionary<int, int>();
+            while (true)
+            {
+                Console.Write("Введите ID товара (или '0' для завершения): ");
+                if (!int.TryParse(Console.ReadLine(), out int productId))
+                {
+                    throw new ArgumentException("ID товара должен быть числом.");
+                }
+                if (productId == 0)
+                    break;
+
+                Console.Write($"Введите фактическое количество для товара {productId}: ");
+                if (!int.TryParse(Console.ReadLine(), out int quantity) || quantity < 0)
+                {
+                    throw new ArgumentException("Количество должно быть неотрицательным числом.");
+                }
+
+                actualQuantities[productId] = quantity;
+            }
+
+            bool success = await _warehouseService.PerformInventoryAsync(warehouseId, actualQuantities);
+            Console.WriteLine(success ? "Инвентаризация успешно проведена." : "Ошибка при проведении инвентаризации.");
+        }
+
+        private async Task GenerateStockReportAsync()
+        {
+            Console.Write("Введите ID склада: ");
+            if (!int.TryParse(Console.ReadLine(), out int warehouseId) || warehouseId <= 0)
+            {
+                throw new ArgumentException("ID склада должен быть положительным числом.");
+            }
+
+            string report = await _reportService.GenerateStockReportAsync(warehouseId);
+            Console.WriteLine("\n" + report);
+        }
+    }
+}
