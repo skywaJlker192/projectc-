@@ -141,3 +141,32 @@ try:
 except sqlite3.IntegrityError as e:
     print(f"Ошибка БД: {e}")
 ```
+
+#**Этап 4: Реализация слоя работы с БД**
+#**Структура**
+## **1. WarehouseDbContext**
+Контекст EF Core для доступа к таблицам:
+
+Products, Inventory, Warehouses, Suppliers, Orders, Users, Reports
+Уникальные индексы: sku (Products), product_id + warehouse_id (Inventory)
+Связи: один-к-одному, один-ко-многим, многие-ко-многим
+
+## **2. DatabaseManager**
+Класс для CRUD-операций с логированием.
+Методы для Products:
+
+CreateProductAsync(name, sku, price): Создает товар, возвращает product_id или null
+GetProductAsync(productId): Возвращает Product или null
+UpdateProductAsync(productId, name, sku, price): Обновляет товар (частично)
+DeleteProductAsync(productId): Удаляет товар
+Методы для Inventory:
+
+AddInventoryAsync(productId, warehouseId, quantity): Добавляет запись, проверяет уникальность
+GetInventoryAsync(inventoryId): Возвращает запись с данными о товаре и складе
+UpdateInventoryAsync(inventoryId, quantity): Обновляет количество
+DeleteInventoryAsync(inventoryId): Удаляет запись
+
+## **3. Обработка ошибок**
+Уникальность (23505): дубликат sku или записи в inventory
+Внешние ключи (23503): удаление связанных данных
+Общие ошибки БД: логируются через ILogger
