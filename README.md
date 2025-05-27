@@ -143,7 +143,7 @@ except sqlite3.IntegrityError as e:
 ```
 
 # **Этап 4: Реализация слоя работы с БД**
-#**Структура**
+# **Структура**
 ## **1. WarehouseDbContext**
 Контекст EF Core для доступа к таблицам:
 
