@@ -172,3 +172,36 @@ DeleteInventoryAsync(inventoryId): Удаляет запись
 Общие ошибки БД: логируются через ILogger
 
 # **Этап 5:  Реализация бизнес-слоя**
+
+# **Структура**
+1. BaseService
+Абстрактный базовый класс для общих функций.
+
+Поля: DatabaseManager, ILogger (защищенные).
+Методы: ValidateInput (виртуальный, для валидации входных данных).
+Назначение: Обеспечивает наследование и общую логику для производных классов.
+
+# **2. WarehouseService**
+Сервис для складских операций, наследуется от BaseService.
+
+Методы:
+AddProductAsync(name, sku, price): Создает товар с валидацией (положительная цена, непустые строки).
+MoveProductAsync(productId, fromWarehouseId, toWarehouseId, quantity): Перемещает товар между складами, проверяет наличие.
+PerformInventoryAsync(warehouseId, actualQuantities): Проводит инвентаризацию, обновляет/добавляет записи.
+
+# **3. ReportService**
+Сервис для отчетов, наследуется от BaseService.
+
+Методы:
+GenerateStockReportAsync(warehouseId): Формирует отчет по остаткам на складе.
+
+ООП:
+Наследование: WarehouseService и ReportService наследуются от BaseService.
+Полиморфизм: ValidateInput может быть переопределен.
+Инкапсуляция: Доступ только через публичные методы, поля защищены.
+
+Логика взаимодействует только с DatabaseManager, не зависит от UI.
+Все методы используют async Task.
+Валидация входных данных, обработка ошибок с логированием.
+
+
