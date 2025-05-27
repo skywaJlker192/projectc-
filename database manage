@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 
 namespace WarehouseSystem
 {
-    // Модели сущностей
     public class Product
     {
         public int ProductId { get; set; }
@@ -65,7 +64,6 @@ namespace WarehouseSystem
         public User User { get; set; }
     }
 
-    // Контекст базы данных
     public class WarehouseDbContext : DbContext
     {
         public DbSet<Product> Products { get; set; }
@@ -90,7 +88,6 @@ namespace WarehouseSystem
         }
     }
 
-    // Класс для работы с базой данных
     public class DatabaseManager
     {
         private readonly WarehouseDbContext _context;
@@ -102,7 +99,6 @@ namespace WarehouseSystem
             _logger = logger;
         }
 
-        // --- CRUD для Products ---
         public async Task<int?> CreateProductAsync(string name, string sku, decimal price)
         {
             try
@@ -202,7 +198,6 @@ namespace WarehouseSystem
             }
         }
 
-        // --- CRUD для Inventory ---
         public async Task<int?> AddInventoryAsync(int productId, int warehouseId, int quantity)
         {
             try
