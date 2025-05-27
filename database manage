@@ -1,0 +1,301 @@
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Npgsql;
+using Microsoft.Extensions.Logging;
+
+namespace WarehouseSystem
+{
+    // Модели сущностей
+    public class Product
+    {
+        public int ProductId { get; set; }
+        public string Name { get; set; }
+        public string Sku { get; set; }
+        public decimal Price { get; set; }
+    }
+
+    public class Inventory
+    {
+        public int InventoryId { get; set; }
+        public int ProductId { get; set; }
+        public int WarehouseId { get; set; }
+        public int Quantity { get; set; }
+        public Product Product { get; set; }
+        public Warehouse Warehouse { get; set; }
+    }
+
+    public class Warehouse
+    {
+        public int WarehouseId { get; set; }
+        public string Location { get; set; }
+    }
+
+    public class Supplier
+    {
+        public int SupplierId { get; set; }
+        public string Name { get; set; }
+        public string Contact { get; set; }
+    }
+
+    public class Order
+    {
+        public int OrderId { get; set; }
+        public int SupplierId { get; set; }
+        public DateTime Date { get; set; }
+        public Supplier Supplier { get; set; }
+    }
+
+    public class User
+    {
+        public int UserId { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public string Role { get; set; }
+    }
+
+    public class Report
+    {
+        public int ReportId { get; set; }
+        public int UserId { get; set; }
+        public string Type { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public User User { get; set; }
+    }
+
+    // Контекст базы данных
+    public class WarehouseDbContext : DbContext
+    {
+        public DbSet<Product> Products { get; set; }
+        public DbSet<Inventory> Inventory { get; set; }
+        public DbSet<Warehouse> Warehouses { get; set; }
+        public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<User> Users { get; set; }
+        public DbSet<Report> Reports { get; set; }
+
+        public WarehouseDbContext(DbContextOptions<WarehouseDbContext> options) : base(options) { }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => p.Sku)
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory>()
+                .HasIndex(i => new { i.ProductId, i.WarehouseId })
+                .IsUnique();
+        }
+    }
+
+    // Класс для работы с базой данных
+    public class DatabaseManager
+    {
+        private readonly WarehouseDbContext _context;
+        private readonly ILogger<DatabaseManager> _logger;
+
+        public DatabaseManager(WarehouseDbContext context, ILogger<DatabaseManager> logger)
+        {
+            _context = context;
+            _logger = logger;
+        }
+
+        // --- CRUD для Products ---
+        public async Task<int?> CreateProductAsync(string name, string sku, decimal price)
+        {
+            try
+            {
+                var product = new Product { Name = name, Sku = sku, Price = price };
+                _context.Products.Add(product);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Создан товар: {name}, ID: {product.ProductId}");
+                return product.ProductId;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+            {
+                _logger.LogError($"Ошибка: товар с SKU {sku} уже существует");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при создании товара: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<Product> GetProductAsync(int productId)
+        {
+            try
+            {
+                var product = await _context.Products.FindAsync(productId);
+                if (product == null)
+                {
+                    _logger.LogWarning($"Товар с ID {productId} не найден");
+                }
+                return product;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при получении товара: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<bool> UpdateProductAsync(int productId, string name = null, string sku = null, decimal? price = null)
+        {
+            try
+            {
+                var product = await _context.Products.FindAsync(productId);
+                if (product == null)
+                {
+                    _logger.LogWarning($"Товар с ID {productId} не найден");
+                    return false;
+                }
+
+                if (!string.IsNullOrEmpty(name)) product.Name = name;
+                if (!string.IsNullOrEmpty(sku)) product.Sku = sku;
+                if (price.HasValue) product.Price = price.Value;
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Обновлен товар с ID {productId}");
+                return true;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+            {
+                _logger.LogError($"Ошибка: SKU {sku} уже используется");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при обновлении товара: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> DeleteProductAsync(int productId)
+        {
+            try
+            {
+                var product = await _context.Products.FindAsync(productId);
+                if (product == null)
+                {
+                    _logger.LogWarning($"Товар с ID {productId} не найден");
+                    return false;
+                }
+
+                _context.Products.Remove(product);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Удален товар с ID {productId}");
+                return true;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23503")
+            {
+                _logger.LogError($"Ошибка: товар с ID {productId} используется в других таблицах");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при удалении товара: {ex.Message}");
+                return false;
+            }
+        }
+
+        // --- CRUD для Inventory ---
+        public async Task<int?> AddInventoryAsync(int productId, int warehouseId, int quantity)
+        {
+            try
+            {
+                var inventory = new Inventory { ProductId = productId, WarehouseId = warehouseId, Quantity = quantity };
+                _context.Inventory.Add(inventory);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Добавлена запись в inventory: ProductId={productId}, WarehouseId={warehouseId}");
+                return inventory.InventoryId;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+            {
+                _logger.LogError($"Ошибка: запись для ProductId={productId} и WarehouseId={warehouseId} уже существует");
+                return null;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23503")
+            {
+                _logger.LogError($"Ошибка: некорректный ProductId или WarehouseId");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при добавлении записи в inventory: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<Inventory> GetInventoryAsync(int inventoryId)
+        {
+            try
+            {
+                var inventory = await _context.Inventory
+                    .Include(i => i.Product)
+                    .Include(i => i.Warehouse)
+                    .FirstOrDefaultAsync(i => i.InventoryId == inventoryId);
+                if (inventory == null)
+                {
+                    _logger.LogWarning($"Запись inventory с ID {inventoryId} не найдена");
+                }
+                return inventory;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при получении записи inventory: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<bool> UpdateInventoryAsync(int inventoryId, int? quantity = null)
+        {
+            try
+            {
+                var inventory = await _context.Inventory.FindAsync(inventoryId);
+                if (inventory == null)
+                {
+                    _logger.LogWarning($"Запись inventory с ID {inventoryId} не найдена");
+                    return false;
+                }
+
+                if (quantity.HasValue) inventory.Quantity = quantity.Value;
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Обновлена запись inventory с ID {inventoryId}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при обновлении записи inventory: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> DeleteInventoryAsync(int inventoryId)
+        {
+            try
+            {
+                var inventory = await _context.Inventory.FindAsync(inventoryId);
+                if (inventory == null)
+                {
+                    _logger.LogWarning($"Запись inventory с ID {inventoryId} не найдена");
+                    return false;
+                }
+
+                _context.Inventory.Remove(inventory);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Удалена запись inventory с ID {inventoryId}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при удалении записи inventory: {ex.Message}");
+                return false;
+            }
+        }
+    }
+}
