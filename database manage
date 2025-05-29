@@ -1,78 +1,19 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Npgsql;
-using Microsoft.Extensions.Logging;
+using WarehouseSystem.Models;
 
-namespace WarehouseSystem
+namespace WarehouseSystem.DataAccess
 {
-    public class Product
-    {
-        public int ProductId { get; set; }
-        public string Name { get; set; }
-        public string Sku { get; set; }
-        public decimal Price { get; set; }
-    }
-
-    public class Inventory
-    {
-        public int InventoryId { get; set; }
-        public int ProductId { get; set; }
-        public int WarehouseId { get; set; }
-        public int Quantity { get; set; }
-        public Product Product { get; set; }
-        public Warehouse Warehouse { get; set; }
-    }
-
-    public class Warehouse
-    {
-        public int WarehouseId { get; set; }
-        public string Location { get; set; }
-    }
-
-    public class Supplier
-    {
-        public int SupplierId { get; set; }
-        public string Name { get; set; }
-        public string Contact { get; set; }
-    }
-
-    public class Order
-    {
-        public int OrderId { get; set; }
-        public int SupplierId { get; set; }
-        public DateTime Date { get; set; }
-        public Supplier Supplier { get; set; }
-    }
-
-    public class User
-    {
-        public int UserId { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
-        public string Role { get; set; }
-    }
-
-    public class Report
-    {
-        public int ReportId { get; set; }
-        public int UserId { get; set; }
-        public string Type { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public User User { get; set; }
-    }
-
     public class WarehouseDbContext : DbContext
     {
-        public DbSet<Product> Products { get; set; }
-        public DbSet<Inventory> Inventory { get; set; }
-        public DbSet<Warehouse> Warehouses { get; set; }
-        public DbSet<Supplier> Suppliers { get; set; }
-        public DbSet<Order> Orders { get; set; }
-        public DbSet<User> Users { get; set; }
-        public DbSet<Report> Reports { get; set; }
+        public DbSet<Product> Products { get; set; } = null!;
+        public DbSet<Inventory> Inventory { get; set; } = null!;
+        public DbSet<Warehouse> Warehouses { get; set; } = null!;
+        public DbSet<StorageZone> StorageZones { get; set; } = null!;
 
         public WarehouseDbContext(DbContextOptions<WarehouseDbContext> options) : base(options) { }
 
@@ -81,10 +22,19 @@ namespace WarehouseSystem
             modelBuilder.Entity<Product>()
                 .HasIndex(p => p.Sku)
                 .IsUnique();
-
             modelBuilder.Entity<Inventory>()
-                .HasIndex(i => new { i.ProductId, i.WarehouseId })
+                .HasIndex(i => new { i.ProductId, i.WarehouseId, i.ZoneId })
                 .IsUnique();
+
+            modelBuilder.Entity<Warehouse>().HasData(
+                new Warehouse { WarehouseId = 1, Location = "Склад A" },
+                new Warehouse { WarehouseId = 2, Location = "Склад B" }
+            );
+
+            modelBuilder.Entity<StorageZone>().HasData(
+                new StorageZone { ZoneId = 1, Name = "Холодильная камера 1", Capacity = 100, WarehouseId = 1 },
+                new StorageZone { ZoneId = 2, Name = "Стеллаж A1", Capacity = 200, WarehouseId = 1 }
+            );
         }
     }
 
@@ -95,58 +45,119 @@ namespace WarehouseSystem
 
         public DatabaseManager(WarehouseDbContext context, ILogger<DatabaseManager> logger)
         {
-            _context = context;
-            _logger = logger;
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public async Task<int?> CreateZoneAsync(string name, int capacity, int warehouseId)
+        {
+            try
+            {
+                _logger.LogInformation("Создание зоны: Name={Name}, Capacity={Capacity}, WarehouseId={WarehouseId}", name, capacity, warehouseId);
+                var zone = new StorageZone { Name = name, Capacity = capacity, WarehouseId = warehouseId };
+                _context.StorageZones.Add(zone);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Зона успешно создана: ZoneId={ZoneId}", zone.ZoneId);
+                return zone.ZoneId;
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Ошибка при создании зоны: Name={Name}, WarehouseId={WarehouseId}", name, warehouseId);
+                return null;
+            }
+        }
+
+        public async Task<List<StorageZone>> GetZonesByWarehouseAsync(int warehouseId)
+        {
+            try
+            {
+                _logger.LogInformation("Получение зон для склада: WarehouseId={WarehouseId}", warehouseId);
+                var zones = await _context.StorageZones
+                    .Where(z => z.WarehouseId == warehouseId)
+                    .Include(z => z.Inventories)
+                    .ThenInclude(i => i.Product)
+                    .ToListAsync();
+                _logger.LogInformation("Успешно получено {Count} зон для склада {WarehouseId}", zones.Count, warehouseId);
+                return zones;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении зон для склада: WarehouseId={WarehouseId}", warehouseId);
+                return new List<StorageZone>();
+            }
+        }
+
+        public async Task<List<Inventory>> GetInventoryByWarehouseAsync(int warehouseId)
+        {
+            try
+            {
+                _logger.LogInformation("Получение остатков для склада {WarehouseId}", warehouseId);
+                var inventories = await _context.Inventory
+                    .Where(i => i.WarehouseId == warehouseId)
+                    .Include(i => i.Product)
+                    .Include(i => i.Warehouse)
+                    .Include(i => i.Zone)
+                    .ToListAsync();
+                _logger.LogInformation("Успешно получено {Count} записей для склада {WarehouseId}", inventories.Count, warehouseId);
+                return inventories;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении остатков для склада {WarehouseId}", warehouseId);
+                return new List<Inventory>();
+            }
         }
 
         public async Task<int?> CreateProductAsync(string name, string sku, decimal price)
         {
             try
             {
+                _logger.LogInformation("Создание товара: Name={Name}, SKU={Sku}, Price={Price}", name, sku, price);
                 var product = new Product { Name = name, Sku = sku, Price = price };
                 _context.Products.Add(product);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Создан товар: {name}, ID: {product.ProductId}");
+                _logger.LogInformation("Товар успешно создан: ProductId={ProductId}", product.ProductId);
                 return product.ProductId;
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+            catch (DbUpdateException ex)
             {
-                _logger.LogError($"Ошибка: товар с SKU {sku} уже существует");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Ошибка при создании товара: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при создании товара: Name={Name}, SKU={Sku}", name, sku);
                 return null;
             }
         }
 
-        public async Task<Product> GetProductAsync(int productId)
+        public async Task<Product?> GetProductAsync(int productId)
         {
             try
             {
+                _logger.LogInformation("Получение товара: ProductId={ProductId}", productId);
                 var product = await _context.Products.FindAsync(productId);
-                if (product == null)
+                if (product != null)
                 {
-                    _logger.LogWarning($"Товар с ID {productId} не найден");
+                    _logger.LogInformation("Товар найден: ProductId={ProductId}, Name={Name}", productId, product.Name);
+                }
+                else
+                {
+                    _logger.LogWarning("Товар не найден: ProductId={ProductId}", productId);
                 }
                 return product;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Ошибка при получении товара: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при получении товара: ProductId={ProductId}", productId);
                 return null;
             }
         }
 
-        public async Task<bool> UpdateProductAsync(int productId, string name = null, string sku = null, decimal? price = null)
+        public async Task<bool> UpdateProductAsync(int productId, string? name = null, string? sku = null, decimal? price = null)
         {
             try
             {
+                _logger.LogInformation("Обновление товара: ProductId={ProductId}, Name={Name}, SKU={Sku}, Price={Price}", productId, name, sku, price);
                 var product = await _context.Products.FindAsync(productId);
                 if (product == null)
                 {
-                    _logger.LogWarning($"Товар с ID {productId} не найден");
+                    _logger.LogWarning("Товар не найден для обновления: ProductId={ProductId}", productId);
                     return false;
                 }
 
@@ -155,17 +166,12 @@ namespace WarehouseSystem
                 if (price.HasValue) product.Price = price.Value;
 
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Обновлен товар с ID {productId}");
+                _logger.LogInformation("Товар успешно обновлен: ProductId={ProductId}", productId);
                 return true;
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+            catch (DbUpdateException ex)
             {
-                _logger.LogError($"Ошибка: SKU {sku} уже используется");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Ошибка при обновлении товара: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при обновлении товара: ProductId={ProductId}", productId);
                 return false;
             }
         }
@@ -174,121 +180,98 @@ namespace WarehouseSystem
         {
             try
             {
+                _logger.LogInformation("Удаление товара: ProductId={ProductId}", productId);
                 var product = await _context.Products.FindAsync(productId);
                 if (product == null)
                 {
-                    _logger.LogWarning($"Товар с ID {productId} не найден");
+                    _logger.LogWarning("Товар не найден для удаления: ProductId={ProductId}", productId);
                     return false;
                 }
 
                 _context.Products.Remove(product);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Удален товар с ID {productId}");
+                _logger.LogInformation("Товар успешно удален: ProductId={ProductId}", productId);
                 return true;
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23503")
+            catch (DbUpdateException ex)
             {
-                _logger.LogError($"Ошибка: товар с ID {productId} используется в других таблицах");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Ошибка при удалении товара: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при удалении товара: ProductId={ProductId}", productId);
                 return false;
             }
         }
 
-        public async Task<int?> AddInventoryAsync(int productId, int warehouseId, int quantity)
+        public async Task<int?> AddInventoryAsync(int productId, int warehouseId, int? zoneId, int quantity)
         {
             try
             {
-                var inventory = new Inventory { ProductId = productId, WarehouseId = warehouseId, Quantity = quantity };
+                _logger.LogInformation("Добавление остатка: ProductId={ProductId}, WarehouseId={WarehouseId}, ZoneId={ZoneId}, Quantity={Quantity}", productId, warehouseId, zoneId, quantity);
+                var inventory = new Inventory { ProductId = productId, WarehouseId = warehouseId, ZoneId = zoneId, Quantity = quantity };
                 _context.Inventory.Add(inventory);
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Добавлена запись в inventory: ProductId={productId}, WarehouseId={warehouseId}");
+                _logger.LogInformation("Остаток успешно добавлен: InventoryId={InventoryId}", inventory.InventoryId);
                 return inventory.InventoryId;
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
+            catch (DbUpdateException ex)
             {
-                _logger.LogError($"Ошибка: запись для ProductId={productId} и WarehouseId={warehouseId} уже существует");
-                return null;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23503")
-            {
-                _logger.LogError($"Ошибка: некорректный ProductId или WarehouseId");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Ошибка при добавлении записи в inventory: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при добавлении остатка: ProductId={ProductId}, WarehouseId={WarehouseId}, ZoneId={ZoneId}", productId, warehouseId, zoneId);
                 return null;
             }
         }
 
-        public async Task<Inventory> GetInventoryAsync(int inventoryId)
+        public async Task<Inventory?> GetInventoryAsync(int productId, int warehouseId, int? zoneId = null)
         {
             try
             {
-                var inventory = await _context.Inventory
+                _logger.LogInformation("Получение остатка: ProductId={ProductId}, WarehouseId={WarehouseId}, ZoneId={ZoneId}", productId, warehouseId, zoneId);
+                var query = _context.Inventory
                     .Include(i => i.Product)
                     .Include(i => i.Warehouse)
-                    .FirstOrDefaultAsync(i => i.InventoryId == inventoryId);
-                if (inventory == null)
+                    .Include(i => i.Zone)
+                    .Where(i => i.ProductId == productId && i.WarehouseId == warehouseId);
+
+                if (zoneId.HasValue)
                 {
-                    _logger.LogWarning($"Запись inventory с ID {inventoryId} не найдена");
+                    query = query.Where(i => i.ZoneId == zoneId);
+                }
+
+                var inventory = await query.FirstOrDefaultAsync();
+                if (inventory != null)
+                {
+                    _logger.LogInformation("Остаток найден: InventoryId={InventoryId}, Quantity={Quantity}", inventory.InventoryId, inventory.Quantity);
+                }
+                else
+                {
+                    _logger.LogWarning("Остаток не найден: ProductId={ProductId}, WarehouseId={WarehouseId}, ZoneId={ZoneId}", productId, warehouseId, zoneId);
                 }
                 return inventory;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Ошибка при получении записи inventory: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при получении остатка: ProductId={ProductId}, WarehouseId={WarehouseId}, ZoneId={ZoneId}", productId, warehouseId, zoneId);
                 return null;
             }
         }
 
-        public async Task<bool> UpdateInventoryAsync(int inventoryId, int? quantity = null)
+        public async Task<bool> UpdateInventoryAsync(int inventoryId, int quantity)
         {
             try
             {
+                _logger.LogInformation("Обновление остатка: InventoryId={InventoryId}, Quantity={Quantity}", inventoryId, quantity);
                 var inventory = await _context.Inventory.FindAsync(inventoryId);
                 if (inventory == null)
                 {
-                    _logger.LogWarning($"Запись inventory с ID {inventoryId} не найдена");
+                    _logger.LogWarning("Остаток не найден для обновления: InventoryId={InventoryId}", inventoryId);
                     return false;
                 }
 
-                if (quantity.HasValue) inventory.Quantity = quantity.Value;
-
+                inventory.Quantity = quantity;
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Обновлена запись inventory с ID {inventoryId}");
+                _logger.LogInformation("Остаток успешно обновлен: InventoryId={InventoryId}", inventoryId);
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Ошибка при обновлении записи inventory: {ex.Message}");
-                return false;
-            }
-        }
-
-        public async Task<bool> DeleteInventoryAsync(int inventoryId)
-        {
-            try
-            {
-                var inventory = await _context.Inventory.FindAsync(inventoryId);
-                if (inventory == null)
-                {
-                    _logger.LogWarning($"Запись inventory с ID {inventoryId} не найдена");
-                    return false;
-                }
-
-                _context.Inventory.Remove(inventory);
-                await _context.SaveChangesAsync();
-                _logger.LogInformation($"Удалена запись inventory с ID {inventoryId}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Ошибка при удалении записи inventory: {ex.Message}");
+                _logger.LogError(ex, "Ошибка при обновлении остатка: InventoryId={InventoryId}", inventoryId);
                 return false;
             }
         }
