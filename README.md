@@ -203,13 +203,20 @@ GenerateStockReportAsync(warehouseId): Формирует отчет по ост
 
 
 # **Работа самого приложения**
-Выбор действия: ![image](https://github.com/user-attachments/assets/a6b82050-fdd4-4812-92bc-bae00640a372)
+Выбор действия: 
+
+![image](https://github.com/user-attachments/assets/a6b82050-fdd4-4812-92bc-bae00640a372)
+
 ![image](https://github.com/user-attachments/assets/0a106b4a-ad7c-4cd5-9ccf-a900ebc8521c)
+
 SKU-это уникальный идентификатор товара, который используется в системах управления складом и продажами для учета и классификации продукции. После того как вы ввели название товара (например, "Ноутбук Dell"), SKU представляет собой код или номер, который однозначно определяет этот конкретный товар в вашей базе данных или системе.
 
 **Проводим инвентаризацию**
+
 ![image](https://github.com/user-attachments/assets/8f15eacc-052f-435a-92c6-69cbf268c029)
 
 **Генерация отчета**
+
 ![image](https://github.com/user-attachments/assets/12d8c9a6-d6f0-4d7f-9519-a1a32b62fd61)
+
 ![image](https://github.com/user-attachments/assets/7e94c21b-cb6e-4c18-9dd3-8dc3d617a87b)
