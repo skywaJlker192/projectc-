@@ -167,3 +167,33 @@ Microsoft.Extensions.DependencyInjection: Используется для вне
 Microsoft.Extensions.Logging: Предоставляет API для логирования.
 
 # **Само приложение**
+
+**Проводим инвентаризацию**
+
+![image](https://github.com/user-attachments/assets/8f15eacc-052f-435a-92c6-69cbf268c029)
+
+**Генерация отчета**
+
+![image](https://github.com/user-attachments/assets/12d8c9a6-d6f0-4d7f-9519-a1a32b62fd61)
+
+![image](https://github.com/user-attachments/assets/7e94c21b-cb6e-4c18-9dd3-8dc3d617a87b)
+
+Уровни логирования:
+
+LogInformation: Для успешных операций (например, "Товар добавлен").
+
+LogWarning: Для некорректных данных или ситуаций, которые не приводят к ошибке (например, "Товар не найден").
+
+LogError: Для исключений и критических ошибок (например, "Ошибка при создании товара").
+
+LogDebug: Для детализированных данных (например, ввод пользователя).
+
+Где добавлено:
+
+Логирование всех операций с базой данных в DatabaseManager.
+
+Логирование бизнес-логики в WarehouseService и ReportService.
+
+Логирование пользовательских действий в ConsoleInterface.
+
+Логирование инициализации приложения в Program
