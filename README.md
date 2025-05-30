@@ -193,6 +193,14 @@ SKU-это уникальный идентификатор товара, кот�
 
 ![image](https://github.com/user-attachments/assets/7e94c21b-cb6e-4c18-9dd3-8dc3d617a87b)
 
+**Добавление зон**
+
+![image](https://github.com/user-attachments/assets/349077d7-a739-4846-9b38-759651dec9f6)
+
+**Список зон**
+
+![image](https://github.com/user-attachments/assets/053788ef-d287-4c72-9db1-f72308baf5e6)
+
 Уровни логирования:
 
 LogInformation: Для успешных операций (например, "Товар добавлен").
