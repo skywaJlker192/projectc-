@@ -162,4 +162,8 @@ Dependency Injection (DI):применяется через ServiceCollection д
 
 ---
 
+Microsoft.Extensions.DependencyInjection: Используется для внедрения зависимостей (Dependency Injection, DI)
 
+Microsoft.Extensions.Logging: Предоставляет API для логирования.
+
+# **Само приложение**
