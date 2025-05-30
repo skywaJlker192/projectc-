@@ -166,6 +166,15 @@ Microsoft.Extensions.DependencyInjection: Используется для вне
 
 Microsoft.Extensions.Logging: Предоставляет API для логирования.
 
+ООП:
+Наследование: WarehouseService и ReportService наследуются от BaseService.
+Полиморфизм: ValidateInput может быть переопределен.
+Инкапсуляция: Доступ только через публичные методы, поля защищены.
+
+Логика взаимодействует только с DatabaseManager, не зависит от UI.
+Все методы используют async Task.
+Валидация входных данных, обработка ошибок с логированием.
+
 # **Само приложение**
 
 ![image](https://github.com/user-attachments/assets/a6b82050-fdd4-4812-92bc-bae00640a372)
